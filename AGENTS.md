@@ -7,9 +7,12 @@ scope: repository
 <instructions>
   <purpose>
     <summary>
-      GitHub Actions-based AI orchestration system. On GitHub events (issues, PR comments, reviews),
-      the `orchestrator-agent` workflow assembles a structured prompt, spins up a devcontainer,
-      and runs `opencode --agent Orchestrator` to delegate work to specialist sub-agents in `.opencode/agents/`.
+      Python-based autonomous AI development floor that transforms GitHub Issues into verified Pull Requests.
+      The system consists of two main components:
+      - **Sentinel**: Orchestrator that polls GitHub for queued tasks, manages worker lifecycle, and dispatches AI agents
+      - **Notifier**: FastAPI webhook receiver that maps GitHub events to a unified work item queue
+      On GitHub events (issues, PR comments, reviews), the `orchestrator-agent` workflow assembles a structured prompt,
+      spins up a devcontainer, and runs `opencode --agent Orchestrator` to delegate work to specialist sub-agents.
     </summary>
   </purpose>
 
@@ -54,15 +57,44 @@ scope: repository
   </template_usage>
 
   <tech_stack>
-    <item>opencode CLI — agent runtime (`opencode --model zai-coding-plan/glm-5 --agent Orchestrator`)</item>
-    <item>ZhipuAI GLM models via `ZHIPU_API_KEY`</item>
-    <item>GitHub Actions + devcontainers/ci — workflow trigger, runner, reproducible container</item>
-    <item>.NET SDK 10 + Aspire + Avalonia templates, Bun, uv (all in devcontainer)</item>
-    <item>MCP servers: `@modelcontextprotocol/server-sequential-thinking`, `@modelcontextprotocol/server-memory`</item>
+    <summary>Python-based backend with FastAPI for web services and async HTTP communication.</summary>
+    <runtime>Python 3.12+ (managed via uv package manager)</runtime>
+    <web_framework>FastAPI — async web framework for the Notifier webhook receiver</web_framework>
+    <http_client>httpx — async HTTP client for GitHub API interactions</http_client>
+    <validation>Pydantic — data validation and settings management</validation>
+    <package_manager>uv — Astral's fast Python package manager (replaces pip/poetry)</package_manager>
+    <testing>pytest + pytest-asyncio + pytest-cov — async-aware testing with coverage</testing>
+    <linting>ruff — fast Python linter (replaces flake8, isort, pyupgrade)</linting>
+    <type_checking>mypy — static type checking with strict mode</type_checking>
+    <containerization>Docker (Dockerfile.sentinel, Dockerfile.notifier)</containerization>
+    <orchestration>
+      <item>opencode CLI — agent runtime (`opencode --model zai-coding-plan/glm-5 --agent Orchestrator`)</item>
+      <item>ZhipuAI GLM models via `ZHIPU_API_KEY`</item>
+      <item>GitHub Actions + devcontainers/ci — workflow trigger, runner, reproducible container</item>
+      <item>MCP servers: `@modelcontextprotocol/server-sequential-thinking`, `@modelcontextprotocol/server-memory`</item>
+    </orchestration>
   </tech_stack>
 
   <repository_map>
+    <!-- Source Code -->
+    <entry><path>src/workflow_orchestration_queue/</path><description>Main Python package</description></entry>
+    <entry><path>src/workflow_orchestration_queue/__init__.py</path><description>Package init — exports WorkItem, TaskType, WorkItemStatus, scrub_secrets</description></entry>
+    <entry><path>src/workflow_orchestration_queue/sentinel.py</path><description>Sentinel Orchestrator — polls GitHub, claims tasks, manages worker lifecycle, posts heartbeats</description></entry>
+    <entry><path>src/workflow_orchestration_queue/notifier.py</path><description>FastAPI webhook receiver — maps GitHub events to work queue</description></entry>
+    <entry><path>src/workflow_orchestration_queue/models/</path><description>Pydantic models (WorkItem, TaskType, WorkItemStatus)</description></entry>
+    <entry><path>src/workflow_orchestration_queue/models/work_item.py</path><description>Canonical data model + secret scrubbing utilities</description></entry>
+    <entry><path>src/workflow_orchestration_queue/queue/</path><description>Queue implementations</description></entry>
+    <entry><path>src/workflow_orchestration_queue/queue/github_queue.py</path><description>GitHub-backed work queue (ITaskQueue implementation)</description></entry>
+    <!-- Tests -->
+    <entry><path>tests/</path><description>pytest test suite</description></entry>
+    <entry><path>tests/test_work_item.py</path><description>Tests for WorkItem model and secret scrubbing</description></entry>
+    <!-- Configuration -->
+    <entry><path>pyproject.toml</path><description>Project config — dependencies, scripts (sentinel, notifier), tool settings (ruff, mypy, pytest)</description></entry>
+    <!-- Dockerfiles -->
+    <entry><path>Dockerfile.sentinel</path><description>Container image for Sentinel orchestrator service</description></entry>
+    <entry><path>Dockerfile.notifier</path><description>Container image for Notifier webhook service</description></entry>
     <!-- Workflows -->
+    <entry><path>.github/workflows/validate.yml</path><description>CI workflow — lint, scan, test, devcontainer build</description></entry>
     <entry><path>.github/workflows/orchestrator-agent.yml</path><description>Primary workflow — assembles prompt, logs into GHCR, runs opencode in devcontainer</description></entry>
     <entry><path>.github/workflows/prompts/orchestrator-agent-prompt.md</path><description>Prompt template with `__EVENT_DATA__` placeholder (sed-substituted at runtime)</description></entry>
     <entry><path>.github/workflows/publish-docker.yml</path><description>Builds Dockerfile, pushes to GHCR with branch-latest and branch-&lt;VERSION_PREFIX.run_number&gt; tags</description></entry>
@@ -73,13 +105,18 @@ scope: repository
     <entry><path>.opencode/commands/</path><description>Reusable command prompts (orchestrate-new-project, grind-pr-reviews, fix-failing-workflows, etc.)</description></entry>
     <entry><path>.opencode/opencode.json</path><description>opencode config — MCP server definitions</description></entry>
     <!-- Devcontainer -->
-    <entry><path>.github/.devcontainer/Dockerfile</path><description>Devcontainer image — .NET SDK, Bun, uv, opencode CLI (build context for publish-docker)</description></entry>
+    <entry><path>.github/.devcontainer/Dockerfile</path><description>Devcontainer image — Python, uv, opencode CLI (build context for publish-docker)</description></entry>
     <entry><path>.github/.devcontainer/devcontainer.json</path><description>Build-time devcontainer config (Dockerfile + Features: node, python, gh CLI)</description></entry>
     <entry><path>.devcontainer/devcontainer.json</path><description>Consumer devcontainer — pulls prebuilt GHCR image, forwards port 4096, and auto-starts `opencode serve` on container start</description></entry>
     <entry><path>scripts/start-opencode-server.sh</path><description>Guarded `opencode serve` bootstrapper used by the devcontainer lifecycle and workflow attach path</description></entry>
     <entry><path>scripts/run-devcontainer-orchestrator.sh</path><description>One-shot script: brings up the devcontainer, ensures the opencode server is running, and executes the orchestrator agent. Used by the workflow and can be invoked directly locally.</description></entry>
-    <!-- Tests -->
+    <!-- Shell tests -->
     <entry><path>test/</path><description>Shell-based tests: devcontainer build, tool availability, prompt assembly</description></entry>
+    <entry><path>test/fixtures/</path><description>Sample webhook payloads for local testing</description></entry>
+    <!-- Remote instructions -->
+    <entry><path>local_ai_instruction_modules/</path><description>Local instruction modules (development rules, workflows, delegation, terminal commands)</description></entry>
+    <!-- Plan docs (seeded at clone time) -->
+    <entry><path>plan_docs/</path><description>External-generated documents seeded at clone time — exclude from linting</description></entry>
 
     <opencode_server>
       <summary>
@@ -88,9 +125,6 @@ scope: repository
         `opencode run --attach http://127.0.0.1:4096 ...` (or the forwarded host port when connecting from outside the container).
       </summary>
     </opencode_server>
-    <entry><path>test/fixtures/</path><description>Sample webhook payloads for local testing</description></entry>
-    <!-- Remote instructions -->
-    <entry><path>local_ai_instruction_modules/</path><description>Local instruction modules (development rules, workflows, delegation, terminal commands)</description></entry>
   </repository_map>
 
   <instruction_source>
@@ -115,9 +149,13 @@ scope: repository
 
   <environment_setup>
     <secrets>
+      <item>`GITHUB_TOKEN` — GitHub API access for Sentinel and Notifier; set in repo Settings → Secrets.</item>
+      <item>`GITHUB_ORG` — GitHub organization name for Sentinel polling.</item>
+      <item>`GITHUB_REPO` — GitHub repository name for Sentinel polling.</item>
+      <item>`SENTINEL_BOT_LOGIN` — (optional) Bot account login for assign-then-verify locking.</item>
+      <item>`WEBHOOK_SECRET` — GitHub webhook secret for Notifier signature verification.</item>
       <item>`ZHIPU_API_KEY` — ZhipuAI model access; set in repo Settings → Secrets.</item>
       <item>`KIMI_CODE_ORCHESTRATOR_AGENT_API_KEY` — Kimi (Moonshot) model access; set in repo Settings → Secrets.</item>
-      <item>`GITHUB_TOKEN` — provided automatically by Actions.</item>
     </secrets>
     <devcontainer_cache>
       Image at `ghcr.io/${{ github.repository }}/devcontainer`. `publish-docker.yml` builds the raw Dockerfile;
@@ -127,18 +165,97 @@ scope: repository
   </environment_setup>
 
   <testing>
-    <guidance>Tests are shell scripts in `test/`. Run directly with `bash`.</guidance>
+    <summary>pytest-based test suite with async support and coverage reporting.</summary>
     <commands>
-      <command>All tests: `bash test/test-devcontainer-build.sh && bash test/test-devcontainer-tools.sh && bash test/test-prompt-assembly.sh`</command>
+      <command>Install dependencies: `uv sync --extra dev`</command>
+      <command>Run all tests: `uv run pytest`</command>
+      <command>Run with coverage: `uv run pytest --cov=src/workflow_orchestration_queue --cov-report=term-missing`</command>
+      <command>Run specific test file: `uv run pytest tests/test_work_item.py -v`</command>
+      <command>Run with markers: `uv run pytest -m "not slow"`</command>
+    </commands>
+    <configuration>
+      <setting>pytest.ini_options.asyncio_mode = "auto"</setting>
+      <setting>pytest.ini_options.testpaths = ["tests"]</setting>
+      <setting>pytest.ini_options.addopts = "-v --tb=short"</setting>
+    </configuration>
+    <shell_tests>
+      Shell-based tests in `test/` validate devcontainer build, tool availability, and prompt assembly:
+      <command>All shell tests: `bash test/test-devcontainer-build.sh && bash test/test-devcontainer-tools.sh && bash test/test-prompt-assembly.sh`</command>
       <command>Prompt changes: `bash test/test-prompt-assembly.sh`</command>
       <command>Dockerfile changes: `bash test/test-devcontainer-tools.sh`</command>
-    </commands>
-    <guidance>Add new fixture payloads to `test/fixtures/` when testing new event types.</guidance>
+    </shell_tests>
   </testing>
+
+  <code_style>
+    <summary>Strict code quality enforced via ruff linting and mypy type checking.</summary>
+    <linting>
+      <tool>ruff</tool>
+      <target_version>py312</target_version>
+      <line_length>100</line_length>
+      <enabled_rules>
+        <rule>E — pycodestyle errors</rule>
+        <rule>W — pycodestyle warnings</rule>
+        <rule>F — Pyflakes</rule>
+        <rule>I — isort</rule>
+        <rule>B — flake8-bugbear</rule>
+        <rule>C4 — flake8-comprehensions</rule>
+        <rule>UP — pyupgrade</rule>
+        <rule>ARG — flake8-unused-arguments</rule>
+        <rule>SIM — flake8-simplify</rule>
+      </enabled_rules>
+      <commands>
+        <command>Lint check: `uv run ruff check src/ tests/`</command>
+        <command>Auto-fix: `uv run ruff check --fix src/ tests/`</command>
+        <command>Format check: `uv run ruff format --check src/ tests/`</command>
+        <command>Format: `uv run ruff format src/ tests/`</command>
+      </commands>
+    </linting>
+    <type_checking>
+      <tool>mypy</tool>
+      <mode>strict</mode>
+      <python_version>3.12</python_version>
+      <commands>
+        <command>Type check: `uv run mypy src/`</command>
+      </commands>
+      <notes>
+        <note>Tests have relaxed typing (`disallow_untyped_defs = false`)</note>
+        <note>Missing imports ignored for third-party libraries</note>
+      </notes>
+    </type_checking>
+  </code_style>
+
+  <project_scripts>
+    <summary>Entry points defined in pyproject.toml [project.scripts].</summary>
+    <script name="sentinel">`uv run sentinel` — Run the Sentinel orchestrator (polls GitHub, dispatches workers)</script>
+    <script name="notifier">`uv run notifier` — Run the Notifier webhook server (FastAPI on port 8000)</script>
+    <alternative>Both can also be run as modules: `uv run python -m workflow_orchestration_queue.sentinel`</alternative>
+  </project_scripts>
+
+  <development_workflow>
+    <setup>
+      <step>1. Clone the repository</step>
+      <step>2. Install dependencies: `uv sync --extra dev`</step>
+      <step>3. Set required environment variables (see environment_setup)</step>
+      <step>4. Run tests to verify setup: `uv run pytest`</step>
+    </setup>
+    <commands>
+      <command name="Setup">`uv sync --extra dev`</command>
+      <command name="Run tests">`uv run pytest`</command>
+      <command name="Lint">`uv run ruff check src/ tests/`</command>
+      <command name="Format">`uv run ruff format src/ tests/`</command>
+      <command name="Type check">`uv run mypy src/`</command>
+      <command name="Run sentinel">`uv run sentinel`</command>
+      <command name="Run notifier">`uv run notifier`</command>
+      <command name="Full validation">`pwsh -NoProfile -File ./scripts/validate.ps1 -All`</command>
+    </commands>
+  </development_workflow>
 
   <coding_conventions>
     <rule>Keep changes minimal and targeted.</rule>
     <rule>Do not hardcode secrets/tokens. When writing tests for credential-scrubbing or secret-detection utilities, use obviously synthetic values that will not trigger `gitleaks` (e.g., `FAKE-KEY-FOR-TESTING-00000000`). Never use prefixes that match real provider formats (`sk-`, `ghp_`, `ghs_`, `AKIA`, etc.) in test fixtures.</rule>
+    <rule>Use Pydantic models for all data structures (WorkItem, TaskType, WorkItemStatus).</rule>
+    <rule>Use async/await for all I/O operations (GitHub API, HTTP requests).</rule>
+    <rule>Import order managed by ruff (isort) — first-party imports use `workflow_orchestration_queue`.</rule>
     <rule>Preserve the `__EVENT_DATA__` placeholder in `orchestrator-agent-prompt.md`.</rule>
     <rule>Keep orchestrator delegation-depth ≤2 and "never write code directly" constraint.</rule>
     <rule>Pin ALL GitHub Actions by full SHA to the latest release — no tag or branch references (`@v4`, `@main`). Format: `uses: owner/action@<full-40-char-SHA> # vX.Y.Z`. The trailing comment with the semver tag is mandatory for human readability. This applies to every `uses:` line in every workflow file, including third-party actions, first-party (`actions/*`), and reusable workflows. Supply-chain attacks via tag mutation are a critical threat — SHA pinning is the only mitigation. When creating or modifying workflows, look up the SHA for the latest release of each action (e.g., via `gh api repos/actions/checkout/releases/latest --jq .tag_name` then resolve to SHA) and pin to it.</rule>
@@ -146,6 +263,7 @@ scope: repository
     <rule>`.opencode/` is checked out by `actions/checkout`; do not COPY it in the Dockerfile.</rule>
     <rule>Dockerfile lives at `.github/.devcontainer/Dockerfile`. Consumer devcontainer uses `"image:"` — no local build.</rule>
     <rule>Repository labels are defined in `.github/.labels.json`. Use `scripts/import-labels.ps1` to sync them to a repo instance. When adding new labels, add them to this file — it is the single source of truth for the label set.</rule>
+    <rule>Use the `scrub_secrets()` function before posting any user-generated content to GitHub comments (R-7).</rule>
   </coding_conventions>
 
   <agent_specific_guardrails>
@@ -180,12 +298,19 @@ scope: repository
         If a check is skipped due to a missing local tool, run:
           pwsh -NoProfile -File ./scripts/install-dev-tools.ps1
 
+        Python-specific commands:
+          uv sync --extra dev        # Install dependencies
+          uv run pytest              # Run tests
+          uv run ruff check src/     # Lint
+          uv run mypy src/           # Type check
+
         | Check                  | Command                                              | When to run              |
         |========================|======================================================|==========================|
         | All (local default)    | ./scripts/validate.ps1 -All                           | Every task               |
-        | Lint only              | ./scripts/validate.ps1 -Lint                           | Quick check              |
+        | Python tests           | uv run pytest                                         | After code changes       |
+        | Python lint            | uv run ruff check src/ tests/                         | Quick check              |
+        | Python type check      | uv run mypy src/                                      | After code changes       |
         | Scan only              | ./scripts/validate.ps1 -Scan                           | Secrets concern          |
-        | Test only              | ./scripts/validate.ps1 -Test                           | After lint passes        |
         | Devcontainer tests     | bash test/test-devcontainer-tools.sh                   | Dockerfile changes       |
       -->
       <rule>When adding a CI workflow check, add its equivalent to scripts/validate.ps1.</rule>
@@ -204,10 +329,32 @@ scope: repository
   </agent_readiness>
 
   <validation_before_handoff>
-    <step>Run applicable shell tests and verification commands.</step>
+    <step>Run applicable tests: `uv run pytest`</step>
+    <step>Run linting: `uv run ruff check src/ tests/`</step>
+    <step>Run type checking: `uv run mypy src/`</step>
+    <step>Run full validation: `pwsh -NoProfile -File ./scripts/validate.ps1 -All`</step>
     <step>Validate workflow YAML: `grep -c "^name:" .github/workflows/orchestrator-agent.yml  # expect 1`</step>
     <step>Summarize: what changed, what was validated, remaining risks (secret-dependent paths, image cache misses).</step>
   </validation_before_handoff>
+
+  <pr_commit_guidelines>
+    <summary>Follow conventional commit format and ensure all CI checks pass before requesting review.</summary>
+    <commit_format>
+      <type>feat: — new feature</type>
+      <type>fix: — bug fix</type>
+      <type>docs: — documentation only</type>
+      <type>style: — formatting, no code change</type>
+      <type>refactor: — code change without fix/feature</type>
+      <type>test: — adding/updating tests</type>
+      <type>chore: — maintenance, CI, dependencies</type>
+    </commit_format>
+    <pr_requirements>
+      <requirement>All CI checks must pass (lint, scan, test)</requirement>
+      <requirement>Code coverage should not decrease</requirement>
+      <requirement>Type checking must pass (`uv run mypy src/`)</requirement>
+      <requirement>No secrets or credentials in code</requirement>
+    </pr_requirements>
+  </pr_commit_guidelines>
 
   <tool_use_instructions>
     <instruction id="querying_microsoft_documentation">
@@ -246,11 +393,11 @@ scope: repository
     </summary>
 
     <runtimes_and_package_managers>
-      <tool name="dotnet" version="10.0.102">`.NET SDK` — build, test, publish C#/F# projects. Includes Avalonia Templates 11.3.12.</tool>
+      <tool name="python" version="3.12+">`Python` — primary runtime for the workflow-orchestration-queue package.</tool>
+      <tool name="uv" version="0.10.9+">`uv` — Astral Python package manager. Also provides `uvx` for ephemeral tool runs.</tool>
       <tool name="node" version="24.14.0 LTS">`Node.js` — JavaScript runtime. Required for MCP server packages (`npx`).</tool>
       <tool name="npm">`npm` — Node package manager (bundled with Node.js).</tool>
       <tool name="bun" version="1.3.10">`Bun` — fast JavaScript/TypeScript runtime, bundler, and package manager.</tool>
-      <tool name="uv" version="0.10.9">`uv` — Astral Python package manager. Also provides `uvx` for ephemeral tool runs.</tool>
     </runtimes_and_package_managers>
 
     <cli_tools>
@@ -258,6 +405,12 @@ scope: repository
       <tool name="opencode" version="1.2.24">`opencode CLI` — AI agent runtime. Runs agents defined in `.opencode/agents/` with MCP server support.</tool>
       <tool name="git">`Git` — version control (system package + devcontainer feature).</tool>
     </cli_tools>
+
+    <python_tools>
+      <tool name="pytest">Testing framework — run with `uv run pytest`</tool>
+      <tool name="ruff">Linter and formatter — run with `uv run ruff check` and `uv run ruff format`</tool>
+      <tool name="mypy">Type checker — run with `uv run mypy src/`</tool>
+    </python_tools>
 
     <github_authentication>
       <summary>
@@ -277,6 +430,8 @@ scope: repository
       <script name="scripts/test-github-permissions.ps1">Verifies `GITHUB_TOKEN` has required permissions (contents, issues, PRs, packages).</script>
       <script name="scripts/query.ps1">PR review thread manager — fetches unresolved review threads from a PR, summarizes them, and can batch-reply and resolve them. Supports `--AutoResolve`, `--DryRun`, `--Interactive`, `--ReplyEach`, `--Path`, `--BodyContains` filtering. Use this instead of writing ad-hoc scripts to resolve PR review comments.</script>
       <script name="scripts/update-remote-indices.ps1">Updates remote instruction module indices.</script>
+      <script name="scripts/validate.ps1">Single validation script for CI and local dev — runs lint, scan, test with individual switches or `-All`.</script>
+      <script name="scripts/install-dev-tools.ps1">Installs required dev tools (actionlint, hadolint, shellcheck, gitleaks, etc.).</script>
     </scripts_directory>
   </available_tools>
 </instructions>

@@ -1,0 +1,49 @@
+# Docker Compose for local development
+# workflow-orchestration-queue services
+
+services:
+  notifier:
+    build:
+      context: .
+      dockerfile: Dockerfile.notifier
+    ports:
+      - "8000:8000"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - workflow-network
+    restart: unless-stopped
+
+  sentinel:
+    build:
+      context: .
+      dockerfile: Dockerfile.sentinel
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_ORG=${GITHUB_ORG}
+      - GITHUB_REPO=${GITHUB_REPO}
+      - SENTINEL_BOT_LOGIN=${SENTINEL_BOT_LOGIN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts:/app/scripts:ro
+    depends_on:
+      notifier:
+        condition: service_healthy
+    networks:
+      - workflow-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+networks:
+  workflow-network:
+    driver: bridge
