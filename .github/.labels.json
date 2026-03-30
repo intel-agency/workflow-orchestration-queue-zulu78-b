@@ -142,5 +142,11 @@
         "color": "5319e7",
         "default": false,
         "description": "User story"
+    },
+    {
+        "name": "implementation:ready",
+        "color": "1d76db",
+        "default": false,
+        "description": "Implementation plan is ready for execution"
     }
 ]
